@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# get directory name relative to pwd
+PARENT_DIR=$(dirname ${BASH_SOURCE})
+
+cd "$PARENT_DIR/../build/"
+cmake ..
+make -j7

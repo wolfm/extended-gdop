@@ -115,7 +115,7 @@ ObfTimes("bcf_loop", cl::desc("Choose how many time the -bcf pass loop on a func
 namespace {
   struct BogusControlFlow : public FunctionPass {
     static char ID; // Pass identification
-    bool flag;
+    bool flag = true;
     BogusControlFlow() : FunctionPass(ID) {}
     BogusControlFlow(bool flag) : FunctionPass(ID) {this->flag = flag; BogusControlFlow();}
 

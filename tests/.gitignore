@@ -1,0 +1,8 @@
+# Ignore all files without extensions
+*
+!*.*
+!*/
+
+# LLVM itermediate files
+*.ll
+*.bc

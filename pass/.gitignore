@@ -1,0 +1,6 @@
+# Ignore all files in build directory
+build/*
+
+# LLVM intermediate files
+*.bc
+*.ll

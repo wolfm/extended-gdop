@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# get directory name relative to pwd
+PARENT_DIR=$(dirname ${BASH_SOURCE})
+cd "$PARENT_DIR/../tests/"
+
+if [ $# -ne 1 ]; then
+    >&2 echo "Usage: $0 <.bc file to compile>"
+else
+    opt-12 -load ../build/boguscf-pass/LLVMPJT.so -boguscf < $1 > ${1%.*}.opt.bc
+fi

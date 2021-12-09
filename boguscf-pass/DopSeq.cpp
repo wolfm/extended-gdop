@@ -10,27 +10,28 @@ using namespace llvm;
 namespace {
     struct DopSeq : public FunctionPass {
         static char ID;
-        bool flag;
+        bool flag = true;
         DopSeq() : FunctionPass(ID) {}
         DopSeq(bool flag) : FunctionPass(ID) {this->flag = flag; DopSeq();}
 
         bool runOnFunction(Function &F) override {
             if(toObfuscate(flag,&F,"dopseq")) {
-                StringRef *sr = new StringRef("fun");
-                if (F.getName().equals(*sr)) {
-                    errs() << "Hello: ";
-                    errs().write_escaped(F.getName()) << '\n';
-                    
-                    addDopSeq(F);
-                        
-                    return true;
+                //StringRef *sr = new StringRef("fun");
+                //if (F.getName().equals(*sr)) {
 
-                // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
-                //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
-                //         errs().write_escaped(i->getOpcodeName()) << '\n';
-                //     }
+                errs() << "Hello: ";
+                errs().write_escaped(F.getName()) << '\n';
+                
+                addDopSeq(F);
+                    
+                return true;
+
+                    // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
+                    //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
+                    //         errs().write_escaped(i->getOpcodeName()) << '\n';
+                    //     }
+                    // }
                 // }
-                }
             }
             return false;
         }

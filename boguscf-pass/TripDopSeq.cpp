@@ -84,12 +84,14 @@ namespace {
             // TODO Do we have to delete twines? Won't we have a memory leak otherwise?
             Twine *dop1_twine = new Twine("dop1"); //created new twine for allocainst
             Twine *dop2_twine = new Twine("dop2"); //created new twine for allocainst
+            Twine *dop3_twine = new Twine("dop2"); //created new twine for allocainst
             // use form (llvm::Type*, unsigned AddressSpace (deafult as 0), llvm::Twine&, llvm::Instruction*)
             //? What is F.getContext() ?
             AllocaInst* dop1 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop1_twine, &(*ii)); //edited to work
-            AllocaInst* dop2 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop2_twine, &(*ii)); //edited t4o work
+            AllocaInst* dop2 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop2_twine, &(*ii)); //edited to work
+            AllocaInst* dop3 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop2_twine, &(*ii)); //edited to work
             // commented out these two lines below since the above instruction inserts these automatically
-            // preBB->getInstList().insert(ii, dop1); 
+            // preBB->getInstList().insert(ii, dop1);
             // preBB->getInstList().insert(ii, dop2);
 
             // store the variable's address to the dop pointers
@@ -223,7 +225,7 @@ namespace {
 }
 
 char DopSeq::ID = 0;
-static RegisterPass<DopSeq> X("DopSeq", "Dynamic opaque predicate obfuscation Pass for straight line code");
+static RegisterPass<TripDopSeq> X("TripDopSeq", "Dynamic opaque predicate obfuscation Pass for straight line code x3");
 
 Pass *llvm::createDopSeq() {
   return new DopSeq();

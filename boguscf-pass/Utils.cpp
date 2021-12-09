@@ -124,7 +124,7 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
   }
 
   // If fla flag is set
-  if (flag == true) {
+  if (flag == true) { // TODO Add a fn length check !!!
     /* Check if the number of applications is correct
     if (!((Percentage > 0) && (Percentage <= 100))) {
       LLVMContext &ctx = llvm::getGlobalContext();

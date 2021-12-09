@@ -81,9 +81,11 @@ namespace {
 
             // insert allca for the dop pointers
             BasicBlock::iterator ii = std::next(insertAlloca);
+            // TODO Do we have to delete twines? Won't we have a memory leak otherwise?
             Twine *dop1_twine = new Twine("dop1"); //created new twine for allocainst
             Twine *dop2_twine = new Twine("dop2"); //created new twine for allocainst
             // use form (llvm::Type*, unsigned AddressSpace (deafult as 0), llvm::Twine&, llvm::Instruction*)
+            //? What is F.getContext() ?
             AllocaInst* dop1 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop1_twine, &(*ii)); //edited to work
             AllocaInst* dop2 = new AllocaInst(Type::getInt32PtrTy(F.getContext()), 0, *dop2_twine, &(*ii)); //edited t4o work
             // commented out these two lines below since the above instruction inserts these automatically
@@ -91,12 +93,19 @@ namespace {
             // preBB->getInstList().insert(ii, dop2);
 
             // store the variable's address to the dop pointers
-            StoreInst* dop1st = new StoreInst(insertAlloca->getOperand(1), dop1, false, ii);
-            StoreInst* dop2st = new StoreInst(insertAlloca->getOperand(1), dop2, false, ii);
+            StoreInst* dop1st = new StoreInst(insertAlloca->getOperand(1), dop1, false, &(*ii));
+            StoreInst* dop2st = new StoreInst(insertAlloca->getOperand(1), dop2, false, &(*ii));
 
             // load the dop1's value
-            LoadInst* dop1p = new LoadInst(dop1, "", false, 4, ii);
-            LoadInst* dop1deref = new LoadInst(dop1p, "", false, 4, ii);
+            Twine *tmep1_twine = new Twine("temp1"); //created new twine for allocainst
+            Twine *temp2_twine = new Twine("temp2"); //created new twine for allocainst
+            LoadInst* dop1p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1, *tmep1_twine, false, &(*ii));
+            LoadInst* dop1deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1p, *temp2_twine, false, &(*ii));
+            /*
+             * LoadInst* dop1p = new LoadInst(dop1, "", false, 4, &(*ii)); // OLD
+             * LoadInst* dop1deref = new LoadInst(dop1p, "", false, 4, &(*ii)); // OLD
+             ? I think the 4 represents alignment? But I don't understand alginment at this point
+             */
 
 
             // create alter BB from cloneing the obfBB
@@ -120,7 +129,8 @@ namespace {
             for (BasicBlock::iterator i = obfBB->begin(), j = alterBB->begin(),
                                       e = obfBB->end(), f = alterBB->end(); i != e && j != f; ++i, ++j) {
 	            // errs() << "install fix ssa:" << "\n";
-	            fixssa[i] = j;
+	            fixssa[&(*i)] = &(*j);
+	            // fixssa[i] = j; // OLD
             }
             // Fix use values in alterBB
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
@@ -159,9 +169,15 @@ namespace {
             alterBB2 = alterBB->splitBasicBlock(splitpt2, *var5);
 
             // create the second dop as a separate BB
+            Twine *temp3_twine = new Twine("temp3");
+            Twine *temp4_twine = new Twine("temp4");
             BasicBlock* dop2BB = BasicBlock::Create(F.getContext(), "dop2BB", &F, obfBB2);
-            LoadInst* dop2p = new LoadInst(dop2, "", false, 4, dop2BB);
-            LoadInst* dop2deref = new LoadInst(dop2p, "", false, 4, dop2BB);
+
+            LoadInst* dop2p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2, *temp3_twine, false, &(*dop2BB));
+            LoadInst* dop2deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB));
+            // LoadInst* dop2p = new LoadInst(dop2, "", false, 4, dop2BB); // OLD
+            // LoadInst* dop2deref = new LoadInst(dop2p, "", false, 4, dop2BB); // OLD
+
             Twine * var6 = new Twine("dopbranch2");
             Value * rvalue2 = ConstantInt::get(Type::getInt32Ty(F.getContext()), 0);
             // dop2BB->getTerminator()->eraseFromParent();
@@ -187,7 +203,8 @@ namespace {
                         p = fixssa[vi];
                         if (insertedPHI.find(vi) == insertedPHI.end()) {
                             q = insertedPHI[vi];
-                            fixnode = PHINode::Create(vi->getType(), 2, "", ii);
+                            Twine *temp4_twine = new Twine("temp5");
+                            fixnode = PHINode::Create(vi->getType(), 2, "", &(*ii));
                             fixnode->addIncoming(vi, vi->getParent());
                             fixnode->addIncoming(p, p->getParent());
                             insertedPHI[vi] = fixnode;

@@ -2,7 +2,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "DopSeq.h"
+#include "TripDopSeq.h"
 #include "Utils.h"
 
 using namespace llvm;

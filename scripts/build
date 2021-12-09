@@ -6,3 +6,4 @@ PARENT_DIR=$(dirname ${BASH_SOURCE})
 cd "$PARENT_DIR/../build/"
 cmake ..
 make -j7
+cd -

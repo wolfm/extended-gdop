@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-# get directory name relative to pwd
+# get filepath of this script's parent directory (relative to pwd)
 PARENT_DIR=$(dirname ${BASH_SOURCE})
-cd "$PARENT_DIR/../tests/"
 
 if [ $# -ne 1 ]; then
     >&2 echo "Usage: $0 <.c or .cpp file to compile>"

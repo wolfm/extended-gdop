@@ -10,3 +10,7 @@
 # pngs and dots
 *.dot
 *.png
+
+# adding .out and .s for compiling
+*.out
+*.s

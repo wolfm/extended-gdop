@@ -6,3 +6,7 @@
 # LLVM itermediate files
 *.ll
 *.bc
+
+# pngs and dots
+*.dot
+*.png

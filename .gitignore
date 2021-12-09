@@ -1,3 +1,8 @@
 build/*
+tests/*
+!tests/*.c
+!tests/*.cpp
+!tests/*.h
+!tests/*.hpp
 
 .vscode/

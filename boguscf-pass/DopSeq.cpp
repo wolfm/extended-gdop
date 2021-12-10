@@ -21,10 +21,8 @@ namespace {
 
                 errs() << "Hello: ";
                 errs().write_escaped(F.getName()) << '\n';
-                
-                addDopSeq(F);
                     
-                return true;
+                return addDopSeq(F);;
 
                     // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                     //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
@@ -37,7 +35,7 @@ namespace {
         }
 
         // add dynamic opaque predicate to sequential code
-        void addDopSeq(Function &F) {
+        bool addDopSeq(Function &F) {
             bool firstStore = true;
             Value *covar;
             BasicBlock *preBB, *postBB, *obfBB;
@@ -45,40 +43,69 @@ namespace {
 
             // split the snippet between two store instructions of a variable
             // the snippet is obfBB
-            for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
-                for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
-                    unsigned opcode = i->getOpcode();
-                    if (opcode == Instruction::Store) {
-                        if (firstStore == true) {
-                            errs() << "The first store: " << *i << "\n";
-                            errs() << *i->getOperand(1)  << "\n";
-                            covar = i->getOperand(1);
-                            insertAlloca = i;
-                            preBBend = std::next(i);
-                            // for(Value::use_iterator ui = i->use_begin(), ie = i->use_end(); ui != ie; ++ui){
-                            //   Value *v = *ui;
-                            //   Instruction *vi = dyn_cast<Instruction>(*ui);
-                            //   errs() << "\t\t" << *vi << "\n";
-                            // }
-                            // errs().write_escaped(i->getOpcodeName()) << '\n';
-                            // errs().write_escaped(i->getOperand(0)->getName()) << '\n';
-                            firstStore = false;
-                            continue;
-                        } else {
-                            if (i->getOperand(1) == covar) {
-                                obfBBend = i;
-                                errs() << "    " << *i << "\n";
-                            }
-                        }
-                    }
-                }
-            }
-	        Function::iterator bb = F.begin();
+            // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
+            //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
+            //         unsigned opcode = i->getOpcode();
+            //         if (opcode == Instruction::Store) {
+            //             if (firstStore == true) {
+            //                 errs() << "The first store: " << *i << "\n";
+            //                 errs() << *i->getOperand(1)  << "\n";
+            //                 covar = i->getOperand(1);
+            //                 insertAlloca = i;
+            //                 preBBend = std::next(i);
+            //                 // for(Value::use_iterator ui = i->use_begin(), ie = i->use_end(); ui != ie; ++ui){
+            //                 //   Value *v = *ui;
+            //                 //   Instruction *vi = dyn_cast<Instruction>(*ui);
+            //                 //   errs() << "\t\t" << *vi << "\n";
+            //                 // }
+            //                 // errs().write_escaped(i->getOpcodeName()) << '\n';
+            //                 // errs().write_escaped(i->getOperand(0)->getName()) << '\n';
+            //                 firstStore = false;
+            //                 continue;
+            //             } else {
+            //                 if (i->getOperand(1) == covar) {
+            //                     obfBBend = i;
+            //                     errs() << "    " << *i << "\n";
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+
+            Function::iterator bb = F.begin();
+            
             preBB = &(*bb);
+
+            if(preBB->getFirstNonPHIOrDbgOrLifetime()) {
+                preBBend = (BasicBlock::iterator)preBB->getFirstNonPHIOrDbgOrLifetime();
+                insertAlloca = preBBend;
+            }
+            else {
+                return false;
+            }
+
+            obfBBend = preBBend;
+
+            for(int i = 0; obfBBend != bb->end() & i < 4;) {
+                obfBBend++;
+                i++;
+            }
+
+            if(obfBBend == bb->end()) {
+                return false;
+            }
+            
+
+            int letsgetthisshit = 0;
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
+
             Twine *var1 = new Twine("obfBB");
             obfBB = bb->splitBasicBlock(preBBend, *var1);
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
             Twine *var2 = new Twine("postBB");
-            postBB = obfBB->splitBasicBlock(obfBBend, *var2);
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
+            postBB = obfBB->splitBasicBlock(obfBBend, *var2); // TODO Right here officer this is the one
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
 
             // insert allca for the dop pointers
             BasicBlock::iterator ii = std::next(insertAlloca);
@@ -93,15 +120,19 @@ namespace {
             // preBB->getInstList().insert(ii, dop1); 
             // preBB->getInstList().insert(ii, dop2);
 
-            // store the variable's address to the dop pointers
-            StoreInst* dop1st = new StoreInst(insertAlloca->getOperand(1), dop1, false, &(*ii));
-            StoreInst* dop2st = new StoreInst(insertAlloca->getOperand(1), dop2, false, &(*ii));
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
+
+            // store the variable's address to the dop pointers  // TODO Help idk what these do
+            // StoreInst* dop1st = new StoreInst(insertAlloca->getOperand(1), dop1, false, &(*ii));
+            // StoreInst* dop2st = new StoreInst(insertAlloca->getOperand(1), dop2, false, &(*ii));
+
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
 
             // load the dop1's value
             Twine *tmep1_twine = new Twine("temp1"); //created new twine for allocainst
             Twine *temp2_twine = new Twine("temp2"); //created new twine for allocainst
             LoadInst* dop1p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1, *tmep1_twine, false, &(*ii));
-            LoadInst* dop1deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1p, *temp2_twine, false, &(*ii));
+            LoadInst* dop1deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop1p, *temp2_twine, false, &(*ii)); // used to be ptr type
             /*
              * LoadInst* dop1p = new LoadInst(dop1, "", false, 4, &(*ii)); // OLD
              * LoadInst* dop1deref = new LoadInst(dop1p, "", false, 4, &(*ii)); // OLD
@@ -113,6 +144,8 @@ namespace {
             const Twine & name = "clone";
             ValueToValueMapTy VMap;
             BasicBlock* alterBB = llvm::CloneBasicBlock(obfBB, VMap, name, &F);
+
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
 
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
                 // Loop over the operands of the instruction
@@ -133,6 +166,10 @@ namespace {
 	            fixssa[&(*i)] = &(*j);
 	            // fixssa[i] = j; // OLD
             }
+
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n"; //8
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n"; //9
+
             // Fix use values in alterBB
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
                 for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
@@ -148,12 +185,16 @@ namespace {
             //   errs() << "    " << it->second->getOpcodeName() << "\n";
             // }
 
+            errs() << "**2* " << letsgetthisshit++ << " ***" << "\n";
+
             // create the first dop at the end of preBB
             Twine * var3 = new Twine("dopbranch1");
             Value * rvalue = ConstantInt::get(Type::getInt32Ty(F.getContext()), 0);
             preBB->getTerminator()->eraseFromParent();
             ICmpInst * dopbranch1 = new ICmpInst(*preBB, CmpInst::ICMP_SGT , dop1deref, rvalue, *var3);
             BranchInst::Create(obfBB, alterBB, dopbranch1, preBB);
+
+            errs() << "**2* " << letsgetthisshit++ << " ***" << "\n";
 
             // split the obfBB and alterBB with an offset
             // TODO Randomize this offset? need to know how big the BB chunks are
@@ -170,13 +211,15 @@ namespace {
             Twine *var5 = new Twine("obfBBclone2");
             alterBB2 = alterBB->splitBasicBlock(splitpt2, *var5);
 
+            errs() << "**2* " << letsgetthisshit++ << " ***" << "\n";
+
             // create the second dop as a separate BB
             Twine *temp3_twine = new Twine("temp3");
             Twine *temp4_twine = new Twine("temp4");
             BasicBlock* dop2BB = BasicBlock::Create(F.getContext(), "dop2BB", &F, obfBB2);
 
             LoadInst* dop2p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2, *temp3_twine, false, &(*dop2BB));
-            LoadInst* dop2deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB));
+            LoadInst* dop2deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB)); // used to be ptr
             // LoadInst* dop2p = new LoadInst(dop2, "", false, 4, dop2BB); // OLD
             // LoadInst* dop2deref = new LoadInst(dop2p, "", false, 4, dop2BB); // OLD
 
@@ -191,6 +234,8 @@ namespace {
             BranchInst::Create(dop2BB, obfBB);
             alterBB->getTerminator()->eraseFromParent();
             BranchInst::Create(dop2BB, alterBB);
+
+            errs() << "*** " << letsgetthisshit++ << " ***" << "\n";
 
             // insert phi node and update uses in postBB
             ii = postBB->begin();
@@ -217,6 +262,8 @@ namespace {
                     }
                 }
             }
+
+            return true;
 
         }
 

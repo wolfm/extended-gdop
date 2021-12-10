@@ -1,6 +1,7 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/raw_ostream.h"
+#include <typeinfo>
 
 #include "DopSeq.h"
 #include "Utils.h"
@@ -22,9 +23,7 @@ namespace {
                 errs() << "Hello: ";
                 errs().write_escaped(F.getName()) << '\n';
                 
-                addDopSeq(F);
-                    
-                return true;
+                return addDopSeq(F);
 
                     // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                     //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
@@ -37,24 +36,39 @@ namespace {
         }
 
         // add dynamic opaque predicate to sequential code
-        void addDopSeq(Function &F) {
+        bool addDopSeq(Function &F) {
             bool firstStore = true;
-            Value *covar;
+            unsigned int covar;
             BasicBlock *preBB, *postBB, *obfBB;
             BasicBlock::iterator preBBend, obfBBend, insertAlloca;
+            Function::iterator bb_start;
+
+            bool hasSetEnd = false;
 
             // split the snippet between two store instructions of a variable
             // the snippet is obfBB
+            // TODO: FIX SO THAT THE STOREINST IS FROM THE SAME BB!
+            // Current problem: the only time a StoreINst has the same opcode
+            // is when the variable is global (because of phi nodes). So use
+            // the valueID, since those should be the same thing (the ref to
+            // store location of the variable)
+            int num_bb = 0;
             for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
+                firstStore = true;
+                errs() << "bb #" << num_bb++ << ": \n" << *bb << "\n";
                 for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
                     unsigned opcode = i->getOpcode();
-                    if (opcode == Instruction::Store) {
+                    if (opcode == Instruction::Store && i->getOperand(1)->getType() == Type::getInt32PtrTy(F.getContext())) {
+                        // errs() << *i->getOperand(1) << "\n";
+                        // errs() << i->getOperand(1)->getValueID() << "\n";
                         if (firstStore == true) {
+                            // errs() << *bb << "\n";
                             errs() << "The first store: " << *i << "\n";
                             errs() << *i->getOperand(1)  << "\n";
-                            covar = i->getOperand(1);
+                            covar = i->getOperand(1)->getValueID();
                             insertAlloca = i;
                             preBBend = std::next(i);
+                            bb_start = bb;
                             // for(Value::use_iterator ui = i->use_begin(), ie = i->use_end(); ui != ie; ++ui){
                             //   Value *v = *ui;
                             //   Instruction *vi = dyn_cast<Instruction>(*ui);
@@ -65,19 +79,42 @@ namespace {
                             firstStore = false;
                             continue;
                         } else {
-                            if (i->getOperand(1) == covar) {
+                            if (i->getOperand(1)->getValueID() == covar) {
                                 obfBBend = i;
-                                errs() << "    " << *i << "\n";
+                                hasSetEnd = true;
+                                errs() << "    " << *i << " hello world \n";
                             }
+                            break;
                         }
                     }
                 }
+                if (hasSetEnd) {
+                    //make the sure obfBB is sufficiently long
+                    int lenObfBB = 0;
+                    for (BasicBlock::iterator b = preBBend, e = obfBBend; b != e; ++b)
+                        lenObfBB++;
+
+                    errs() << "size of obfBB = " << lenObfBB + 1 << "\n";
+                    if (lenObfBB + 1 < 4) hasSetEnd = false;
+                    else break;    
+                }    
             }
-	        Function::iterator bb = F.begin();
-            preBB = &(*bb);
+            
+            if (!hasSetEnd) return false;
+
+             
+            //don't want this anymore as we don't know if it starts at the first BB
+	        //Function::iterator bb = F.begin(); 
+            preBB = &(*bb_start);
+            errs() << *preBB << "\n";
             Twine *var1 = new Twine("obfBB");
-            obfBB = bb->splitBasicBlock(preBBend, *var1);
+            // errs() << "gets to before obfBB assignment \n";
+            obfBB = bb_start->splitBasicBlock(preBBend, *var1);
+            // errs() << *obfBB << "hello \n";
+            // errs() << *obfBBend << " hello \n";
             Twine *var2 = new Twine("postBB");
+            //errs() << *obfBB << "hello \n";
+            // this finds a store value that's inside the same BB
             postBB = obfBB->splitBasicBlock(obfBBend, *var2);
 
             // insert allca for the dop pointers
@@ -92,22 +129,23 @@ namespace {
             // commented out these two lines below since the above instruction inserts these automatically
             // preBB->getInstList().insert(ii, dop1); 
             // preBB->getInstList().insert(ii, dop2);
-
+            
             // store the variable's address to the dop pointers
             StoreInst* dop1st = new StoreInst(insertAlloca->getOperand(1), dop1, false, &(*ii));
             StoreInst* dop2st = new StoreInst(insertAlloca->getOperand(1), dop2, false, &(*ii));
+
+            // errs() << *dop1st << '\n';
 
             // load the dop1's value
             Twine *tmep1_twine = new Twine("temp1"); //created new twine for allocainst
             Twine *temp2_twine = new Twine("temp2"); //created new twine for allocainst
             LoadInst* dop1p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1, *tmep1_twine, false, &(*ii));
-            LoadInst* dop1deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1p, *temp2_twine, false, &(*ii));
+            LoadInst* dop1deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop1p, *temp2_twine, false, &(*ii));
             /*
              * LoadInst* dop1p = new LoadInst(dop1, "", false, 4, &(*ii)); // OLD
              * LoadInst* dop1deref = new LoadInst(dop1p, "", false, 4, &(*ii)); // OLD
              ? I think the 4 represents alignment? But I don't understand alginment at this point
              */
-
 
             // create alter BB from cloneing the obfBB
             const Twine & name = "clone";
@@ -142,6 +180,7 @@ namespace {
                     }
                 }
             }
+            
             // for (std::map<Instruction*, Instruction*>::iterator it = fixssa.begin(), e = fixssa.end(); it != e; ++it) {
             //   errs() << "print fix ssa:" << "\n";
             //   errs() << "    " << it->first->getOpcodeName() << "\n";
@@ -152,9 +191,25 @@ namespace {
             Twine * var3 = new Twine("dopbranch1");
             Value * rvalue = ConstantInt::get(Type::getInt32Ty(F.getContext()), 0);
             preBB->getTerminator()->eraseFromParent();
-            ICmpInst * dopbranch1 = new ICmpInst(*preBB, CmpInst::ICMP_SGT , dop1deref, rvalue, *var3);
-            BranchInst::Create(obfBB, alterBB, dopbranch1, preBB);
+            ///////////////// TROUBLE LINE //////////////////////////
+            // issue: trying to compare an i32 type (rvalue) with an i32* type (dop1deref)
+            // don't know what the fix should be necessarily, but that's the problem
+            // it looks like the main problem is that we are currently storing a pointer that
+            // has no value... although I'm not really sure. Because we are trying to compare
+            // a zero value to a pointer that's supposed to point to a DOP, but it doesn't do so...
+            // it works for now by fixing the dop1deref variable to be a Int32 instead of a Int32Ptr,
+            // but it actually working when run is a different thing.
+            // errs() << "dop1p= " << *dop1p << "\n";
+            // errs() << "dop1deref= " << *dop1deref << " \n";
+            // errs() << "rvalue= " << *rvalue << " \n";
+            // errs() << "dop1deref type= " << typeid((dop1deref->getOperand(0))).name() << " \n";
+            // errs() << "rvalue type= " << typeid(rvalue).name() << " \n";
+            ICmpInst * dopbranch1 = new ICmpInst(*preBB, CmpInst::ICMP_SGT, dop1deref, rvalue, *var3);
+            //errs() << *dopbranch1 << "\n";
 
+            //errs() << "gets past connecting BBs \n";
+            BranchInst::Create(obfBB, alterBB, dopbranch1, preBB);
+            
             // split the obfBB and alterBB with an offset
             // TODO Randomize this offset? need to know how big the BB chunks are
             BasicBlock::iterator splitpt1 = obfBB->begin(),
@@ -166,9 +221,20 @@ namespace {
 	        n = num+1;
             for (BasicBlock::iterator e = alterBB->end(); splitpt2 != e && n > 0; ++splitpt2, --n) ;
             Twine *var4 = new Twine("obfBB2");
+            //errs() << *obfBB << '\n';
             obfBB2 = obfBB->splitBasicBlock(splitpt1, *var4);
             Twine *var5 = new Twine("obfBBclone2");
+            //errs() << *alterBB << "\n";
+
+            // need to check if the BB is more than one instruction long
+            // if it's not, then return false
+            int instCount = 0;
+            for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end();
+                 i != e; ++i)
+                 instCount++;
+            if (instCount < 2) return false;
             alterBB2 = alterBB->splitBasicBlock(splitpt2, *var5);
+            //errs() << "hola hijo \n";
 
             // create the second dop as a separate BB
             Twine *temp3_twine = new Twine("temp3");
@@ -176,7 +242,7 @@ namespace {
             BasicBlock* dop2BB = BasicBlock::Create(F.getContext(), "dop2BB", &F, obfBB2);
 
             LoadInst* dop2p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2, *temp3_twine, false, &(*dop2BB));
-            LoadInst* dop2deref = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB));
+            LoadInst* dop2deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB));
             // LoadInst* dop2p = new LoadInst(dop2, "", false, 4, dop2BB); // OLD
             // LoadInst* dop2deref = new LoadInst(dop2p, "", false, 4, dop2BB); // OLD
 
@@ -217,6 +283,11 @@ namespace {
                     }
                 }
             }
+            errs() << *preBB << '\n';
+            errs() << *obfBB << '\n';
+            errs() << *alterBB << '\n';
+            errs() << *postBB << '\n';
+            return true;
 
         }
 

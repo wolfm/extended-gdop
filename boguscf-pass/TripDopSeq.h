@@ -41,8 +41,8 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass *createDopSeq ();
-	Pass *createDopSeq (bool flag);
+	Pass *createTripDopSeq ();
+	Pass *createTripDopSeq (bool flag);
 }
 #endif
 

@@ -4,7 +4,7 @@
 PARENT_DIR=$(dirname ${BASH_SOURCE})
 
 if [ $# -ne 1 ]; then
-    >&2 echo "Usage: $0 <.c or .cpp file to compile>"
+    >&2 echo "Usage: $0 <.c file to compile>"
 else
     clang-12 -emit-llvm $1 -c -o  ${1%.*}.bc
 fi

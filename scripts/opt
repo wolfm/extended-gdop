@@ -6,7 +6,7 @@ PARENT_DIR=$(dirname ${BASH_SOURCE})
 
 # Usage function
 script_opt_usage() {
-    >&2 echo "Usage: $0 (-h) <.bc file to compile> <pass>"
+    >&2 echo "Usage: $0 (-h) <.bc file to obfuscate> <pass>"
 }
 
 # If too few arguments

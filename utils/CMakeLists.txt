@@ -1,4 +1,4 @@
-add_library(utils_lib SHARED
+add_library(utils SHARED
     CryptoUtils.cpp
     Utils.cpp
 )

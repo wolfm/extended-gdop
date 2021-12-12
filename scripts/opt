@@ -4,26 +4,31 @@
 PARENT_DIR=$(dirname ${BASH_SOURCE})
 # cd "$PARENT_DIR/../tests/"
 
+# Usage function
 script_opt_usage() {
-    >&2 echo "Usage: $0 (-h) <.bc file to compile>"
+    >&2 echo "Usage: $0 (-h) <.bc file to compile> <pass>"
 }
 
+# If too few arguments
 if [ $# -lt 1 ]; then
     script_opt_usage
     exit 1
 fi
 
+# If help
 if [ $1 == "-h" ]; then
-    opt-12  -load "${PARENT_DIR}/../build/utils/libutils_lib.so" \
+    opt-12  -load "${PARENT_DIR}/../build/utils/libutils.so" \
         -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
         -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
         --help
-else
+# If otherwise incorrect number of arguments
+elif [ $# -ne 2 ]; then
     script_opt_usage
     exit 1
 fi
 
-opt-12  -load "${PARENT_DIR}/../build/utils/libutils_lib.so" \
+# Run obfuscation pass given in argument 2
+opt-12  -load "${PARENT_DIR}/../build/utils/libutils.so" \
         -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
         -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
         -"$2" < $1 > ${1%.*}.opt.bc

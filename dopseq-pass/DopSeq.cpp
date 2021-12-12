@@ -338,7 +338,7 @@ namespace {
                         p = fixssa[vi];
                         if (insertedPHI.find(vi) == insertedPHI.end()) {
                             q = insertedPHI[vi];
-                            Twine *temp4_twine = new Twine("temp5");
+                            // Twine *temp5_twine = new Twine("temp5");
                             fixnode = PHINode::Create(vi->getType(), 2, "", &(*ii));
                             fixnode->addIncoming(vi, vi->getParent());
                             fixnode->addIncoming(p, p->getParent());
@@ -350,6 +350,34 @@ namespace {
                     }
                 }
             }
+
+            // TODO deal with the issue that arises if we are dealing with a value produced by the isntruction
+            
+            // Iterate over obfBB2, finding uses defined in obfBB
+            ii = dop2BB->begin(); // The target at which to insert PHINodes
+            for (BasicBlock::iterator i = obfBB2->begin(), e = obfBB2->end() ; i != e; ++i) {
+                for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
+                    Instruction *def = dyn_cast<Instruction>(*opi);
+
+                    // Erase instructions of obfBB2 from fixssa
+                    // These instuctions were inserted into fixssa before splitting obfBB
+                    if(auto target = fixssa.find(&(*i)); target != fixssa.end()) {
+                        fixssa.erase(target);
+                        errs() << "Erased entry " << &(*i) << " from fixssa\n";
+                    }
+                    
+                    if (fixssa.find(def) != fixssa.end()) {
+                        // Insert PhiNode into dop2BB
+                        PHINode *phi;
+                        Twine *phi_twine = new Twine("phi");
+                        phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                        phi->addIncoming(def, def->getParent());
+                        phi->addIncoming(fixssa[def], fixssa[def]->getParent());
+                        *opi = (Value*) phi;
+                    }
+                }
+            }
+
             // errs() << *preBB << '\n';
             // errs() << *obfBB << '\n';
             // errs() << *alterBB << '\n';

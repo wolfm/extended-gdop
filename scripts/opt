@@ -4,9 +4,26 @@
 PARENT_DIR=$(dirname ${BASH_SOURCE})
 # cd "$PARENT_DIR/../tests/"
 
-if [ $# -ne 1 ]; then
-    >&2 echo "Usage: $0 <.bc file to compile>"
-else
-    echo "${PARENT_DIR}/../build/boguscf-pass/LLVMPJT.so"
-    opt-12 -load "${PARENT_DIR}/../build/utils/libutils_lib.so" -load "${PARENT_DIR}/../build/boguscf-pass/LLVMPJT.so" -boguscf < $1 > ${1%.*}.opt.bc
+script_opt_usage() {
+    >&2 echo "Usage: $0 (-h) <.bc file to compile>"
+}
+
+if [ $# -lt 1 ]; then
+    script_opt_usage
+    exit 1
 fi
+
+if [ $1 == "-h" ]; then
+    opt-12  -load "${PARENT_DIR}/../build/utils/libutils_lib.so" \
+        -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
+        -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
+        --help
+else
+    script_opt_usage
+    exit 1
+fi
+
+opt-12  -load "${PARENT_DIR}/../build/utils/libutils_lib.so" \
+        -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
+        -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
+        -"$2" < $1 > ${1%.*}.opt.bc

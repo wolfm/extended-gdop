@@ -12,3 +12,4 @@ add_subdirectory(utils)
 
 # LLVM Passes
 add_subdirectory(boguscf-pass)
+add_subdirectory(dopseq-pass)

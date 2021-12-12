@@ -2,11 +2,19 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Support/raw_ostream.h"
 #include <typeinfo>
+#include <set>
+#include <string>
 
 #include "DopSeq.h"
 #include "Utils.h"
 
 using namespace llvm;
+
+// CURRENT ISSUE: Need to add Phi nodes after the first DOP, in case there are
+// reassignments of previous variables in either BB
+// However, since the GDOPs always evaluate to the same value, we should be
+// able to ignore these differences - we know that those values will not be
+// used in the middle block, so it shouldn't be an issue
 
 namespace {
     struct DopSeq : public FunctionPass {
@@ -52,61 +60,96 @@ namespace {
             // is when the variable is global (because of phi nodes). So use
             // the valueID, since those should be the same thing (the ref to
             // store location of the variable)
-            int num_bb = 0;
+            int tempNames = 500;
+            std::set<string> nonStoreNames;
+
             for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                 firstStore = true;
-                errs() << "bb #" << num_bb++ << ": \n" << *bb << "\n";
+                covar = -1;
+                string ogName = "";
+                
                 for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
                     unsigned opcode = i->getOpcode();
-                    if (opcode == Instruction::Store && i->getOperand(1)->getType() == Type::getInt32PtrTy(F.getContext())) {
-                        // errs() << *i->getOperand(1) << "\n";
-                        // errs() << i->getOperand(1)->getValueID() << "\n";
-                        if (firstStore == true) {
+                    
+                    // only make dops of Int32PtrTy (since that's most stores)
+                    // and check to make sure we haven't tried this store already
+                    if (opcode == Instruction::Store && 
+                        i->getOperand(1)->getType() == Type::getInt32PtrTy(F.getContext())
+                        && !nonStoreNames.count(ogName)) {
+        
+                        // errs() << "hello \n";
+                        // errs() << i->getOperand(1)->getName() << "\n";
+                        // errs() << *i->getOperand(1)->getType() << "\n";
+
+                        if (firstStore == true &&
+                            !nonStoreNames.count(string(i->getOperand(1)->getName()))) {
                             // errs() << *bb << "\n";
                             errs() << "The first store: " << *i << "\n";
-                            errs() << *i->getOperand(1)  << "\n";
+                            //errs() << *i->getOperand(1)  << "\n";
+                            
+                            // create and assign a tempName to the operand. will be
+                            // used to make sure we don't check the same store 2x
+                            string tempN = "temp" + to_string(tempNames++);
+                            Twine *tempName = new Twine(tempN);
+                            i->getOperand(1)->setName(*tempName);
+
+                            // set the covar (making sure they are storing to
+                            // the same variable), ogName for later
                             covar = i->getOperand(1)->getValueID();
+                            ogName = tempN;
                             insertAlloca = i;
                             preBBend = std::next(i);
                             bb_start = bb;
-                            // for(Value::use_iterator ui = i->use_begin(), ie = i->use_end(); ui != ie; ++ui){
-                            //   Value *v = *ui;
-                            //   Instruction *vi = dyn_cast<Instruction>(*ui);
-                            //   errs() << "\t\t" << *vi << "\n";
-                            // }
-                            // errs().write_escaped(i->getOpcodeName()) << '\n';
-                            // errs().write_escaped(i->getOperand(0)->getName()) << '\n';
                             firstStore = false;
                             continue;
-                        } else {
-                            if (i->getOperand(1)->getValueID() == covar) {
-                                obfBBend = i;
+                        } else if (i->getOperand(1)->getValueID() == covar) {
+                            obfBBend = i;
+
+                            //make the sure obfBB is sufficiently long
+                            int lenObfBB = 0;
+                            for (BasicBlock::iterator b = preBBend, e = obfBBend; b != e; ++b)
+                                lenObfBB++;
+
+                            // if the space between the stores isn't sufficient, then
+                            // add the value to the set (so we don't check it again),
+                            if (lenObfBB + 1 < 4) {
+                                nonStoreNames.insert(ogName);
+                                --bb;
+                            } else {
                                 hasSetEnd = true;
-                                errs() << "    " << *i << " hello world \n";
+                                //i->getOperand(1)->setName(ogName);
+                                errs() << lenObfBB << "\n";
+                                errs() << "The second store: " << *i << "\n";
                             }
                             break;
                         }
                     }
+                    if (i == e) nonStoreNames.clear();
                 }
                 if (hasSetEnd) {
-                    //make the sure obfBB is sufficiently long
-                    int lenObfBB = 0;
-                    for (BasicBlock::iterator b = preBBend, e = obfBBend; b != e; ++b)
-                        lenObfBB++;
+                    break;
+                    // //make the sure obfBB is sufficiently long
+                    // int lenObfBB = 0;
+                    // for (BasicBlock::iterator b = preBBend, e = obfBBend; b != e; ++b)
+                    //     lenObfBB++;
 
-                    errs() << "size of obfBB = " << lenObfBB + 1 << "\n";
-                    if (lenObfBB + 1 < 4) hasSetEnd = false;
-                    else break;    
-                }    
+                    // //errs() << "size of obfBB = " << lenObfBB + 1 << "\n";
+                    // if (lenObfBB + 1 < 4) hasSetEnd = false;
+                    // else break;    
+                }
             }
-            
+            // print out to see what load types we can have
+            // for (std::set<Type>::iterator itr = loadInstTypes.begin(); itr != loadInstTypes.end(); ++itr) {
+            //     errs() << *itr << "\n";
+            // }
+            //return false;
             if (!hasSetEnd) return false;
 
              
             //don't want this anymore as we don't know if it starts at the first BB
 	        //Function::iterator bb = F.begin(); 
             preBB = &(*bb_start);
-            errs() << *preBB << "\n";
+            //errs() << *preBB << "\n";
             Twine *var1 = new Twine("obfBB");
             // errs() << "gets to before obfBB assignment \n";
             obfBB = bb_start->splitBasicBlock(preBBend, *var1);
@@ -151,6 +194,8 @@ namespace {
             const Twine & name = "clone";
             ValueToValueMapTy VMap;
             BasicBlock* alterBB = llvm::CloneBasicBlock(obfBB, VMap, name, &F);
+            errs() << *alterBB;
+            errs() << *obfBB;
 
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
                 // Loop over the operands of the instruction
@@ -165,21 +210,43 @@ namespace {
 
             // Map instructions in obfBB and alterBB
 	        std::map<Instruction*, Instruction*> fixssa;
+            std::map<Instruction*, Instruction*> fixssa_reverse;
             for (BasicBlock::iterator i = obfBB->begin(), j = alterBB->begin(),
                                       e = obfBB->end(), f = alterBB->end(); i != e && j != f; ++i, ++j) {
 	            // errs() << "install fix ssa:" << "\n";
 	            fixssa[&(*i)] = &(*j);
+                fixssa_reverse[&(*j)] = &(*i);
 	            // fixssa[i] = j; // OLD
             }
+            for(auto i = fixssa.begin(); i != fixssa.end(); ++i){
+                errs() << i->first << "  " << i->second << "\n";
+            }
             // Fix use values in alterBB
+            
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
+
+                errs() << "Instruction:\n";
+
                 for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
-                    Instruction *vi = dyn_cast<Instruction>(*opi);
+                    
+                    // Value *v = opi;
+
+                    Instruction *vi = fixssa_reverse[dyn_cast<Instruction>(*opi)];
+                    // errs() << vi << "\n";
+                    // // errs() << typeid(vi).name() << "\n";
+                    // errs() << **opi << "\n";
+                    // errs() << typeid(**opi).name() << "\n";
+                    errs() << "\t" << vi << "\n";
                     if (fixssa.find(vi) != fixssa.end()) {
+                        errs() << "changing the instruction information \n";
+                        errs() << *opi << "\n";
                         *opi = (Value*)fixssa[vi];
+                        errs() << *opi << "\n";
                     }
                 }
             }
+            errs() << *alterBB;
+            errs() << *obfBB;
             
             // for (std::map<Instruction*, Instruction*>::iterator it = fixssa.begin(), e = fixssa.end(); it != e; ++it) {
             //   errs() << "print fix ssa:" << "\n";
@@ -228,11 +295,11 @@ namespace {
 
             // need to check if the BB is more than one instruction long
             // if it's not, then return false
-            int instCount = 0;
-            for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end();
-                 i != e; ++i)
-                 instCount++;
-            if (instCount < 2) return false;
+            // int instCount = 0;
+            // for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end();
+            //      i != e; ++i)
+            //      instCount++;
+            // if (instCount < 2) return false;
             alterBB2 = alterBB->splitBasicBlock(splitpt2, *var5);
             //errs() << "hola hijo \n";
 
@@ -283,10 +350,14 @@ namespace {
                     }
                 }
             }
-            errs() << *preBB << '\n';
-            errs() << *obfBB << '\n';
-            errs() << *alterBB << '\n';
-            errs() << *postBB << '\n';
+            // errs() << *preBB << '\n';
+            // errs() << *obfBB << '\n';
+            // errs() << *alterBB << '\n';
+            // errs() << *postBB << '\n';
+            for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb)
+                errs() << *bb << "\n";
+            errs() << "we have obfuscated a BB in function ";
+            errs().write_escaped(F.getName()) << "\n";
             return true;
 
         }

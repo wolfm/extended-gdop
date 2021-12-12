@@ -8,5 +8,5 @@ if [ $# -ne 1 ]; then
     >&2 echo "Usage: $0 <.bc file to compile>"
 else
     echo "${PARENT_DIR}/../build/boguscf-pass/LLVMPJT.so"
-    opt-12 -load "${PARENT_DIR}/../build/boguscf-pass/LLVMPJT.so" -boguscf < $1 > ${1%.*}.opt.bc
+    opt-12 -load "${PARENT_DIR}/../build/utils/libutils_lib.so" -load "${PARENT_DIR}/../build/boguscf-pass/LLVMPJT.so" -boguscf < $1 > ${1%.*}.opt.bc
 fi

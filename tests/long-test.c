@@ -14,12 +14,12 @@ void inc_a() {
 		else {
 			int d = 3;
 			//b++;
-			printf("hello");
-			printf("hello");
-			printf("hello");
-			printf("hello");
-			printf("hello");
-			printf("hello");
+			printf("hello\n");
+			printf("hello\n");
+			printf("hello\n");
+			printf("hello\n");
+			printf("hello\n");
+			printf("hello\n");
 			int c = 5;
 			int g = 0;
 			int f = 10;

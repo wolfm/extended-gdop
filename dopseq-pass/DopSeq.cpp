@@ -28,7 +28,7 @@ namespace {
                 //StringRef *sr = new StringRef("fun");
                 //if (F.getName().equals(*sr)) {
 
-                errs() << "Hello: ";
+                errs() << "Function: ";
                 errs().write_escaped(F.getName()) << '\n';
                 
                 return addDopSeq(F);
@@ -349,108 +349,156 @@ namespace {
                         *opi = (Value*)fixnode;
                     }
                 }
-            }
-
-            // TODO deal with the issue that arises if we are dealing with a value produced by the isntruction
+            }            
             
-            // Iterate over obfBB2, finding uses defined in obfBB
+            // Iterate over alterBB2, finding uses of values defined in obfBB or obfBB2
             ii = dop2BB->begin(); // The target at which to insert PHINodes
             std::map<Instruction*, PHINode*> dop2BBPHI; // instructions to PHI nodes
             for (BasicBlock::iterator i = obfBB2->begin(), e = obfBB2->end() ; i != e; ++i) {
-                for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
+                for(User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
                     Instruction *def = dyn_cast<Instruction>(*opi);
 
-                    // Erase instructions of obfBB2 from fixssa
-                    // These instuctions were inserted into fixssa before splitting obfBB
-                    if(auto target = fixssa.find(&(*i)); target != fixssa.end()) {
-                        fixssa.erase(target);
-                        // errs() << "Erased entry " << &(*i) << " from fixssa\n";
+                    // If the opi can't be cast to an Instruction*
+                    if(def == nullptr) continue;
+
+                    /*
+                     *  If definition is in obfBB
+                     *  Then insert PHI node in dop2BB, replace uses after it with the Phi node value,
+                     *  No cleanup phinode necessary in postBB, because the value is necessarily defined there
+                    */
+                    if (def->getParent() == obfBB) {
+
+                        // If PHINode not already created for this Value
+                        if(auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
+                            // Insert PhiNode into dop2BB
+                            PHINode *phi;
+                            phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi->addIncoming(def, def->getParent());
+                            phi->addIncoming(fixssa[def], fixssa[def]->getParent());
+                            dop2BBPHI[def] = phi;
+                        }
+
+                        // Replace operand in obfBB2 and alterBB2 with the Value of the PHINode
+                        *opi = (Value*) dop2BBPHI[def];
+                        if(fixssa[&(*i)]->getParent() != alterBB) {
+                            fixssa[&(*i)]->setOperand(opi->getOperandNo(), (Value*) dop2BBPHI[def]);
+                        }
+                        
                     }
-                    
-                    if (fixssa.find(def) != fixssa.end()) {
-                        // Insert PhiNode into dop2BB
-                        PHINode *phi;
-                        Twine *phi_twine = new Twine("phi");
-                        phi = PHINode::Create(def->getType(), 2, "", &(*ii));
-                        phi->addIncoming(def, def->getParent());
-                        phi->addIncoming(fixssa[def], fixssa[def]->getParent());
-                        *opi = (Value*) phi;
-                        // assign the alterBB2 def to the phi now representing that value
-                        dop2BBPHI[fixssa[def]] = phi; 
+                    /*
+                     *  Else if defined in obfBB2 in one path and alterBB on the other path
+                     *  Then insert dummy into obfBB, insert phinode into dop2BB, replace uses in alterBB2 only
+                     *  with the phinode value, and add cleanup phinode in postBB (regular value on left, 
+                     *  phinode value on right)                 
+                    */   
+                    else if (def->getParent() == obfBB && fixssa[def]->getParent() == alterBB) {
+
+                        // If PHINode not already created for this Value
+                        if(auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
+                            // Insert dummy instruction at the end of obfBB
+                            // TODO make this instruction just set a constant value or something
+                            Instruction *dummy_inst = obfBB2->begin()->clone();
+                            obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
+
+                            // Insert PHI Node into dop2BB
+                            // create phi node to insert at beginning of dopBB2
+                            ii = dop2BB->begin();
+                            PHINode *phi;
+                            phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi->addIncoming(dummy_inst, obfBB);
+                            phi->addIncoming(fixssa[def], alterBB);
+
+                            // Add cleanup phiNode in postBB
+                            ii = postBB->begin();
+                            PHINode *phi2;
+                            phi2 = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi2->addIncoming( (Value*) def, obfBB2);
+                            phi2->addIncoming( (Value*) phi, alterBB2);
+
+                            // Add to map
+                            dop2BBPHI[def] = phi;
+                        }
+                        
+                        // Replace operand in alterBB2 ONLY with the Value of the PHINode
+                        fixssa[&(*i)]->setOperand(opi->getOperandNo(), (Value*) dop2BBPHI[def]);
                     }
                 }
             }
+
+
             
             // special case: check to see if the extra operand in the cloned BB
             // is an instruction that's used on the next line.
             // if it is, then insert a phi node with a junk left value in dop2BB
             // and insert another phi node in postBB, then fix down
-            if ((----alterBB->end())->getNumOperands() > 0) {
-                auto last_alter_inst = ----alterBB->end();
-                errs() << *alterBB2->begin() << '\n';
-                errs() << *last_alter_inst << '\n';
-                for (auto opi = alterBB2->begin()->op_begin(), ope = alterBB2->begin()->op_end(); opi != ope; ++opi) {
-                    Instruction *def = dyn_cast<Instruction>(*opi);
+            // if ((----alterBB->end())->getNumOperands() > 0) {
+            //     auto last_alter_inst = ----alterBB->end();
+            //     errs() << *alterBB2->begin() << '\n';
+            //     errs() << *last_alter_inst << '\n';
+            //     for (auto opi = alterBB2->begin()->op_begin(), ope = alterBB2->begin()->op_end(); opi != ope; ++opi) {
+            //         Instruction *def = dyn_cast<Instruction>(*opi);
                     
-                    // this checks if def is used in the last inst in alterBB
-                    if (def && &(*last_alter_inst) == &(*def)) {
-                        // create and insert garbage instruction in obfBB
-                        Instruction *bs_whatever = def->clone();
-                        obfBB->getInstList().insert(obfBB->begin(), bs_whatever);
+            //         // this checks if def is used in the last inst in alterBB
+            //         if (def && &(*last_alter_inst) == &(*def)) {
+            //             // create and insert garbage instruction in obfBB
+            //             Instruction *bs_whatever = def->clone();
+            //             obfBB->getInstList().insert(obfBB->begin(), bs_whatever);
                         
-                        // create phi node to insert at beginning of dopBB2
-                        PHINode *phi;
-                        Twine *phi_twine = new Twine("phi3");
-                        phi = PHINode::Create(def->getType(), 2, "", &(*ii));
-                        phi->addIncoming(bs_whatever, obfBB);
-                        phi->addIncoming(def, def->getParent());
-                        *opi = (Value*) phi;
-                        // assign the alterBB2 def to the phi now representing that value
-                        dop2BBPHI[def] = phi;
+            //             // create phi node to insert at beginning of dopBB2
+            //             PHINode *phi;
+            //             Twine *phi_twine = new Twine("phi3");
+            //             phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+            //             phi->addIncoming(bs_whatever, obfBB);
+            //             phi->addIncoming(def, def->getParent());
+            //             *opi = (Value*) phi;
+            //             // assign the alterBB2 def to the phi now representing that value
+            //             dop2BBPHI[def] = phi;
 
-                        // errs() << *obfBB2->begin() << '\n';
-                        // errs() << &*obfBB2->begin() << '\n';
-                        auto obfBB2_load_val = (Value*) &(*obfBB2->begin());
-                        // errs() << *obfBB2_load_val;
-                        // create a phi node in postBB 
-                        PHINode *phi1;
-                        Twine *phi_twine1 = new Twine("phi35");
-                        phi1 = PHINode::Create(def->getType(), 2, "", &(*postBB->begin()));
-                        phi1->addIncoming(obfBB2_load_val, obfBB2);
-                        phi1->addIncoming(*opi, alterBB2);
+            //             // errs() << *obfBB2->begin() << '\n';
+            //             // errs() << &*obfBB2->begin() << '\n';
+            //             auto obfBB2_load_val = (Value*) &(*obfBB2->begin());
+            //             // errs() << *obfBB2_load_val;
+            //             // create a phi node in postBB 
+            //             PHINode *phi1;
+            //             Twine *phi_twine1 = new Twine("phi35");
+            //             phi1 = PHINode::Create(def->getType(), 2, "", &(*postBB->begin()));
+            //             phi1->addIncoming(obfBB2_load_val, obfBB2);
+            //             phi1->addIncoming(*opi, alterBB2);
             
-                        // fix all uses of the above defs
-                        for (BasicBlock::iterator i = ++postBB->begin(), e = postBB->end(); i != e; ++i) {
-                            for (User::op_iterator opie = i->op_begin(), opee = i->op_end(); opie != opee; ++opie) {
-                                Instruction *def1 = dyn_cast<Instruction>(*opie);
+            //             // fix all uses of the above defs
+            //             for (BasicBlock::iterator i = ++postBB->begin(), e = postBB->end(); i != e; ++i) {
+            //                 for (User::op_iterator opie = i->op_begin(), opee = i->op_end(); opie != opee; ++opie) {
+            //                     Instruction *def1 = dyn_cast<Instruction>(*opie);
 
-                                // if our operand's definition was part of a previous phi node,
-                                // then change it to be phi node
-                                if (def1 && &(*obfBB2_load_val) == &(*def1)) {
-                                    *opie = (Value*) phi1;
-                                } //if
-                            } //for
-                        } //for
-                    } //if
+            //                     // if our operand's definition was part of a previous phi node,
+            //                     // then change it to be phi node
+            //                     if (def1 && &(*obfBB2_load_val) == &(*def1)) {
+            //                         *opie = (Value*) phi1;
+            //                     } //if
+            //                 } //for
+            //             } //for
+            //         } //if
                         
-                } //for
-            } //if
+            //     } //for
+            // } //if
+
+
             //errs() << *((----alterBB->end())->getOperand(1)) << "\n";
 
             // Make a loop that changes the operands that are part of a
             // phi node in dop2BB to be that new value. need to use a mapping
             // from the OG instruction to the Phi node instruction
-            for (BasicBlock::iterator i = alterBB2->begin(), e = alterBB2->end(); i != e; ++i) {
-                for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
-                    Instruction *def = dyn_cast<Instruction>(*opi);
+            // for (BasicBlock::iterator i = alterBB2->begin(), e = alterBB2->end(); i != e; ++i) {
+            //     for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
+            //         Instruction *def = dyn_cast<Instruction>(*opi);
 
-                    // if our operand's definition was part of a previous phi node,
-                    // then change it to be phi node
-                    if (dop2BBPHI.find(def) != dop2BBPHI.end()) {
-                        *opi = (Value*) dop2BBPHI[def];
-                    } //if
-                } //for
-            } //for
+            //         // if our operand's definition was part of a previous phi node,
+            //         // then change it to be phi node
+            //         if (dop2BBPHI.find(def) != dop2BBPHI.end()) {
+            //             *opi = (Value*) dop2BBPHI[def];
+            //         } //if
+            //     } //for
+            // } //for
             
 
             errs() << *preBB << '\n';

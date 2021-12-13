@@ -325,34 +325,10 @@ namespace {
             alterBB->getTerminator()->eraseFromParent();
             BranchInst::Create(dop2BB, alterBB);
 
-            // insert phi node and update uses in postBB
-            ii = postBB->begin();
-            std::map<Instruction*, PHINode*> insertedPHI;
-            for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
-                for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
-                    Instruction *p;
-                    Instruction *vi = dyn_cast<Instruction>(*opi);
-		            PHINode *q;
-                    if (fixssa.find(vi) != fixssa.end()) {
-                        PHINode *fixnode;
-                        p = fixssa[vi];
-                        if (insertedPHI.find(vi) == insertedPHI.end()) {
-                            q = insertedPHI[vi];
-                            // Twine *temp5_twine = new Twine("temp5");
-                            fixnode = PHINode::Create(vi->getType(), 2, "", &(*ii));
-                            fixnode->addIncoming(vi, vi->getParent());
-                            fixnode->addIncoming(p, p->getParent());
-                            insertedPHI[vi] = fixnode;
-                        } else {
-                            fixnode = q;
-                        }
-                        *opi = (Value*)fixnode;
-                    }
-                }
-            }            
+                     
             
             // Iterate over alterBB2, finding uses of values defined in obfBB or obfBB2
-            ii = dop2BB->begin(); // The target at which to insert PHINodes
+             // The target at which to insert PHINodes
             std::map<Instruction*, PHINode*> dop2BBPHI; // instructions to PHI nodes
             for (BasicBlock::iterator i = obfBB2->begin(), e = obfBB2->end() ; i != e; ++i) {
                 for(User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
@@ -366,12 +342,13 @@ namespace {
                      *  Then insert PHI node in dop2BB, replace uses after it with the Phi node value,
                      *  No cleanup phinode necessary in postBB, because the value is necessarily defined there
                     */
-                    if (def->getParent() == obfBB) {
+                    if (def->getParent() == obfBB ) {
 
                         // If PHINode not already created for this Value
                         if(auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
                             // Insert PhiNode into dop2BB
                             PHINode *phi;
+                            ii = dop2BB->begin();
                             phi = PHINode::Create(def->getType(), 2, "", &(*ii));
                             phi->addIncoming(def, def->getParent());
                             phi->addIncoming(fixssa[def], fixssa[def]->getParent());
@@ -391,13 +368,91 @@ namespace {
                      *  with the phinode value, and add cleanup phinode in postBB (regular value on left, 
                      *  phinode value on right)                 
                     */   
-                    else if (def->getParent() == obfBB && fixssa[def]->getParent() == alterBB) {
+                    else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB) {
 
                         // If PHINode not already created for this Value
                         if(auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
                             // Insert dummy instruction at the end of obfBB
                             // TODO make this instruction just set a constant value or something
-                            Instruction *dummy_inst = obfBB2->begin()->clone();
+                            // Instruction *dummy_inst = obfBB2->begin()->clone();
+                            Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
+                            //obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
+
+                            // Insert PHI Node into dop2BB
+                            // create phi node to insert at beginning of dopBB2
+                            ii = dop2BB->begin();
+                            PHINode *phi;
+                            phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi->addIncoming(dummy_inst, obfBB);
+                            phi->addIncoming(fixssa[def], alterBB);
+
+                            // Add cleanup phiNode in postBB
+                            ii = postBB->begin();
+                            PHINode *phi2;
+                            phi2 = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi2->addIncoming( (Value*) def, obfBB2);
+                            phi2->addIncoming( (Value*) phi, alterBB2);
+
+                            // Add to map
+                            dop2BBPHI[def] = phi;
+                            dop2BBPHI[(Instruction *)phi] = phi2;
+                        }
+                        
+                        // Replace operand in alterBB2 ONLY with the Value of the PHINode
+                        fixssa[&(*i)]->setOperand(opi->getOperandNo(), (Value*) dop2BBPHI[def]);
+                    }
+                }
+            }
+
+            // insert phi node and update uses in postBB
+            ii = postBB->begin();
+            for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
+                for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
+                    Instruction *p;
+                    Instruction *def = dyn_cast<Instruction>(*opi);
+		            // PHINode *q;
+
+                    // If the opi can't be cast to an Instruction*
+                    if (def == nullptr) continue;
+
+                    // if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end())
+                    //     *opi = (Value*) dop2BBPHI[def];
+                    //     continue;
+
+                    // If both possible operands come from obfBB and alterBB, can makea phi node in dop2BB
+                    if (def->getParent() == obfBB && fixssa[def]->getParent() == alterBB) {
+                        if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
+                            PHINode *phi;
+                            ii = dop2BB->begin();
+                            phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi->addIncoming(def, def->getParent());
+                            phi->addIncoming(fixssa[def], fixssa[def]->getParent());
+                            dop2BBPHI[def] = phi;
+                        }
+
+                        //set operand for postBB use
+                        errs() << "Case 1: swapping out operand " << *opi << "\n";
+                        *opi = (Value*) dop2BBPHI[def];
+                        errs() << "operand is now " << *opi << "\n";
+                    }
+                    else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB2) {
+                        if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
+                            PHINode *phi;
+                            ii = postBB->begin();
+                            phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                            phi->addIncoming(def, def->getParent());
+                            phi->addIncoming(fixssa[def], fixssa[def]->getParent());
+                            dop2BBPHI[def] = phi;
+                        }                        
+
+                        //set operand for postBB use
+                        errs() << "Case 2: swapping out operand " << *opi << "\n";
+                        *opi = (Value*) dop2BBPHI[def];
+                        errs() << "operand is now " << *opi << "\n";
+                    }
+                    else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB) {
+                        if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end() && dop2BBPHI.find((Instruction *)&(*i_phi)) == dop2BBPHI.end()) {
+                            Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
                             obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
 
                             // Insert PHI Node into dop2BB
@@ -417,13 +472,31 @@ namespace {
 
                             // Add to map
                             dop2BBPHI[def] = phi;
+                            dop2BBPHI[(Instruction *)phi] = phi2;
                         }
-                        
-                        // Replace operand in alterBB2 ONLY with the Value of the PHINode
-                        fixssa[&(*i)]->setOperand(opi->getOperandNo(), (Value*) dop2BBPHI[def]);
+
+                        errs() << "Special case: swapping out operand " << *opi << "\n";
+                        *opi = (Value*) dop2BBPHI[dop2BBPHI[def]];
+                        errs() << "operand is now " << *opi << "\n";
                     }
+
+                    // if (fixssa.find(def) != fixssa.end()) {
+                    //     PHINode *fixnode;
+                    //     p = fixssa[def];
+                    //     if (dop2BBPHI.find(def) == dop2BBPHI.end()) {
+                    //         q = dop2BBPHI[vi];
+                    //         // Twine *temp5_twine = new Twine("temp5");
+                    //         fixnode = PHINode::Create(vi->getType(), 2, "", &(*ii));
+                    //         fixnode->addIncoming(vi, vi->getParent());
+                    //         fixnode->addIncoming(p, p->getParent());
+                    //         dop2BBPHI[vi] = fixnode;
+                    //     } else {
+                    //         fixnode = q;
+                    //     }
+                    //     *opi = (Value*)fixnode;
+                    // }
                 }
-            }
+            }   
 
 
             

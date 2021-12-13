@@ -194,8 +194,8 @@ namespace {
             const Twine & name = "clone";
             ValueToValueMapTy VMap;
             BasicBlock* alterBB = llvm::CloneBasicBlock(obfBB, VMap, name, &F);
-            errs() << *alterBB;
-            errs() << *obfBB;
+            // errs() << *alterBB;
+            // errs() << *obfBB;
 
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
                 // Loop over the operands of the instruction
@@ -218,14 +218,14 @@ namespace {
                 fixssa_reverse[&(*j)] = &(*i);
 	            // fixssa[i] = j; // OLD
             }
-            for(auto i = fixssa.begin(); i != fixssa.end(); ++i){
-                errs() << i->first << "  " << i->second << "\n";
-            }
+            // for(auto i = fixssa.begin(); i != fixssa.end(); ++i){
+            //     errs() << i->first << "  " << i->second << "\n";
+            // }
             // Fix use values in alterBB
             
             for (BasicBlock::iterator i = alterBB->begin(), e = alterBB->end() ; i != e; ++i) {
 
-                errs() << "Instruction:\n";
+                // errs() << "Instruction:\n";
 
                 for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
                     
@@ -236,17 +236,17 @@ namespace {
                     // // errs() << typeid(vi).name() << "\n";
                     // errs() << **opi << "\n";
                     // errs() << typeid(**opi).name() << "\n";
-                    errs() << "\t" << vi << "\n";
+                    // errs() << "\t" << vi << "\n";
                     if (fixssa.find(vi) != fixssa.end()) {
-                        errs() << "changing the instruction information \n";
-                        errs() << *opi << "\n";
+                        // errs() << "changing the instruction information \n";
+                        // errs() << *opi << "\n";
                         *opi = (Value*)fixssa[vi];
-                        errs() << *opi << "\n";
+                        // errs() << *opi << "\n";
                     }
                 }
             }
-            errs() << *alterBB;
-            errs() << *obfBB;
+            // errs() << *alterBB;
+            // errs() << *obfBB;
             
             // for (std::map<Instruction*, Instruction*>::iterator it = fixssa.begin(), e = fixssa.end(); it != e; ++it) {
             //   errs() << "print fix ssa:" << "\n";
@@ -355,6 +355,7 @@ namespace {
             
             // Iterate over obfBB2, finding uses defined in obfBB
             ii = dop2BB->begin(); // The target at which to insert PHINodes
+            std::map<Instruction*, PHINode*> dop2BBPHI; // instructions to PHI nodes
             for (BasicBlock::iterator i = obfBB2->begin(), e = obfBB2->end() ; i != e; ++i) {
                 for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
                     Instruction *def = dyn_cast<Instruction>(*opi);
@@ -363,7 +364,7 @@ namespace {
                     // These instuctions were inserted into fixssa before splitting obfBB
                     if(auto target = fixssa.find(&(*i)); target != fixssa.end()) {
                         fixssa.erase(target);
-                        errs() << "Erased entry " << &(*i) << " from fixssa\n";
+                        // errs() << "Erased entry " << &(*i) << " from fixssa\n";
                     }
                     
                     if (fixssa.find(def) != fixssa.end()) {
@@ -374,16 +375,93 @@ namespace {
                         phi->addIncoming(def, def->getParent());
                         phi->addIncoming(fixssa[def], fixssa[def]->getParent());
                         *opi = (Value*) phi;
+                        // assign the alterBB2 def to the phi now representing that value
+                        dop2BBPHI[fixssa[def]] = phi; 
                     }
                 }
             }
+            
+            // special case: check to see if the extra operand in the cloned BB
+            // is an instruction that's used on the next line.
+            // if it is, then insert a phi node with a junk left value in dop2BB
+            // and insert another phi node in postBB, then fix down
+            if ((----alterBB->end())->getNumOperands() > 0) {
+                auto last_alter_inst = ----alterBB->end();
+                errs() << *alterBB2->begin() << '\n';
+                errs() << *last_alter_inst << '\n';
+                for (auto opi = alterBB2->begin()->op_begin(), ope = alterBB2->begin()->op_end(); opi != ope; ++opi) {
+                    Instruction *def = dyn_cast<Instruction>(*opi);
+                    
+                    // this checks if def is used in the last inst in alterBB
+                    if (def && &(*last_alter_inst) == &(*def)) {
+                        // create and insert garbage instruction in obfBB
+                        Instruction *bs_whatever = def->clone();
+                        obfBB->getInstList().insert(obfBB->begin(), bs_whatever);
+                        
+                        // create phi node to insert at beginning of dopBB2
+                        PHINode *phi;
+                        Twine *phi_twine = new Twine("phi3");
+                        phi = PHINode::Create(def->getType(), 2, "", &(*ii));
+                        phi->addIncoming(bs_whatever, obfBB);
+                        phi->addIncoming(def, def->getParent());
+                        *opi = (Value*) phi;
+                        // assign the alterBB2 def to the phi now representing that value
+                        dop2BBPHI[def] = phi;
 
-            // errs() << *preBB << '\n';
-            // errs() << *obfBB << '\n';
-            // errs() << *alterBB << '\n';
-            // errs() << *postBB << '\n';
-            for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb)
-                errs() << *bb << "\n";
+                        // errs() << *obfBB2->begin() << '\n';
+                        // errs() << &*obfBB2->begin() << '\n';
+                        auto obfBB2_load_val = (Value*) &(*obfBB2->begin());
+                        // errs() << *obfBB2_load_val;
+                        // create a phi node in postBB 
+                        PHINode *phi1;
+                        Twine *phi_twine1 = new Twine("phi35");
+                        phi1 = PHINode::Create(def->getType(), 2, "", &(*postBB->begin()));
+                        phi1->addIncoming(obfBB2_load_val, obfBB2);
+                        phi1->addIncoming(*opi, alterBB2);
+            
+                        // fix all uses of the above defs
+                        for (BasicBlock::iterator i = ++postBB->begin(), e = postBB->end(); i != e; ++i) {
+                            for (User::op_iterator opie = i->op_begin(), opee = i->op_end(); opie != opee; ++opie) {
+                                Instruction *def1 = dyn_cast<Instruction>(*opie);
+
+                                // if our operand's definition was part of a previous phi node,
+                                // then change it to be phi node
+                                if (def1 && &(*obfBB2_load_val) == &(*def1)) {
+                                    *opie = (Value*) phi1;
+                                } //if
+                            } //for
+                        } //for
+                    } //if
+                        
+                } //for
+            } //if
+            //errs() << *((----alterBB->end())->getOperand(1)) << "\n";
+
+            // Make a loop that changes the operands that are part of a
+            // phi node in dop2BB to be that new value. need to use a mapping
+            // from the OG instruction to the Phi node instruction
+            for (BasicBlock::iterator i = alterBB2->begin(), e = alterBB2->end(); i != e; ++i) {
+                for (User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
+                    Instruction *def = dyn_cast<Instruction>(*opi);
+
+                    // if our operand's definition was part of a previous phi node,
+                    // then change it to be phi node
+                    if (dop2BBPHI.find(def) != dop2BBPHI.end()) {
+                        *opi = (Value*) dop2BBPHI[def];
+                    } //if
+                } //for
+            } //for
+            
+
+            errs() << *preBB << '\n';
+            errs() << *obfBB << '\n';
+            errs() << *alterBB << '\n';
+            errs() << *dop2BB << "\n";
+            errs() << *obfBB2 << "\n";
+            errs() << *alterBB2 << "\n";
+            errs() << *postBB << '\n';
+            // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb)
+            //     errs() << *bb << "\n";
             errs() << "we have obfuscated a BB in function ";
             errs().write_escaped(F.getName()) << "\n";
             return true;

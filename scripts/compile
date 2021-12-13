@@ -3,8 +3,17 @@
 # get filepath of this script's parent directory (relative to pwd)
 PARENT_DIR=$(dirname ${BASH_SOURCE})
 
-if [ $# -ne 1 ]; then
-    >&2 echo "Usage: $0 <.c file to compile>"
-else
-    clang-12 -emit-llvm $1 -c -o  ${1%.*}.bc
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+	>&2 echo "Usage: $0 <.c file to compile> (output directory)"
+	>&2 echo "If not specified, the output directory will be the source file's parent directory"
+	exit 1
 fi
+
+# If output directory specified
+if [ $# -eq 2 ]; then
+	FILEPATH="$2/$(basename $1)"
+# If output directory not specified
+else
+	FILEPATH="$1"
+fi
+clang-12 -emit-llvm $1 -c -o  ${FILEPATH%.*}.bc

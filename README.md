@@ -14,14 +14,14 @@ Gabriel Garfinkel, Marshall Rhea, and Michael Wolf
 Run `scripts/build`. This will cmake and make to build each pass and the `utils` library in your build directory.
 
 ### Compiling a program to LLVM bitcode
-Before we obfuscate a program, we must compile it to LLVM bitcode. Run `scripts/compile <.c file to compile>` to accomplish this. Due to limitations of [obfuscator-llvm](https://github.com/obfuscator-llvm/obfuscator/), we only support optimization of c files.
+Before we obfuscate a program, we must compile it to LLVM bitcode. Run `scripts/compile <.c file to compile> (output directory)` to accomplish this. Due to limitations of [obfuscator-llvm](https://github.com/obfuscator-llvm/obfuscator/), we only support optimization of c files.
 
 Alternatively, you can manually compile to LLVM bticode using the command
 ```
 clang-12 -emit-llvm <input_file.c> -c -o  <output_name.bc>
 ```
 
-We provide a number of test C programs in the `tests/` directory.
+We provide a number of test C programs in the `tests/` directory, and we include the gnu `coreutils` project as a submodule to use for benchmarking.
 
 ### Running Obfuscation Passes
 Run the script `scripts/opt (-h) <.bc file to obfuscate> <pass>`. The passes provided in our project are:

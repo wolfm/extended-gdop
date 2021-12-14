@@ -24,8 +24,8 @@ namespace {
         TripDopSeq(bool flag) : FunctionPass(ID) {this->flag = flag; TripDopSeq();}
 
         bool runOnFunction(Function &F) override {
-            errs() << "before to obf ";
-            errs().write_escaped(F.getName()) << '\n';
+            // errs() << "before to obf ";
+            // errs().write_escaped(F.getName()) << '\n';
             if(toObfuscate(flag,&F,"dopseq")) {
                 //StringRef *sr = new StringRef("fun");
                 //if (F.getName().equals(*sr)) {
@@ -33,7 +33,12 @@ namespace {
                 errs() << "Function: ";
                 errs().write_escaped(F.getName()) << '\n';
                 
-                return addTripDopSeq(F);
+                bool hasRun = false;
+                while (addTripDopSeq(F)) {
+                    hasRun = true;
+                }
+
+                return hasRun;
 
                     // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                     //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
@@ -47,6 +52,17 @@ namespace {
 
         // add dynamic opaque predicate to sequential code
         bool addTripDopSeq(Function &F) {
+            int numBB = 0;
+            int numEdges = 0;
+            for (Function::iterator bb = F.begin(); bb != F.end(); ++bb) {
+                ++numBB;
+                for (BasicBlock *Pred : predecessors(&(*bb))) {
+                    ++numEdges;
+                }
+            }
+            errs() << "original function:\nnum BBs = " << numBB << "\nnum edges = " 
+                   << numEdges << "\ncyclomatic number = " << numEdges - numBB + 2 
+                   << '\n';
             bool firstStore = true;
             unsigned int covar;
             BasicBlock *preBB, *postBB, *obfBB;
@@ -86,7 +102,7 @@ namespace {
                         if (firstStore == true &&
                             !nonStoreNames.count(string(i->getOperand(1)->getName()))) {
                             // errs() << *bb << "\n";
-                            errs() << "The first store: " << *i << "\n";
+                            // errs() << "The first store: " << *i << "\n";
                             //errs() << *i->getOperand(1)  << "\n";
                             
                             // create and assign a tempName to the operand. will be
@@ -120,8 +136,8 @@ namespace {
                             } else {
                                 hasSetEnd = true;
                                 //i->getOperand(1)->setName(ogName);
-                                errs() << lenObfBB << "\n";
-                                errs() << "The second store: " << *i << "\n";
+                                // errs() << lenObfBB << "\n";
+                                // errs() << "The second store: " << *i << "\n";
                             }
                             break;
                         }
@@ -492,7 +508,7 @@ namespace {
             for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
                 // if it's a phi node, that means we've inserted it. keep going
                 if (isa<PHINode>(*i)){
-                    errs() << "opname: " << i->getOpcodeName() << '\n';
+                    //errs() << "opname: " << i->getOpcodeName() << '\n';
                     continue;
                 }
                 for(User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
@@ -519,9 +535,9 @@ namespace {
                         }
 
                         //set operand for postBB use
-                        errs() << "Case 1: swapping out operand " << *opi << "\n";
+                        // errs() << "Case 1: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[def];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     // If both possible operands come from obfBB2 and alterBB2, can makea phi node in dop3BB
                     else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB2) {
@@ -535,9 +551,9 @@ namespace {
                         }                        
 
                         //set operand for postBB use
-                        errs() << "Case 2: swapping out operand " << *opi << "\n";
+                        // errs() << "Case 2: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[def];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     // If both possible operands come from obfBB3 and alterBB3, can makea phi node in postBB
                     // If both possible operands come from obfBB2 and alterBB2, can makea phi node in dop3BB
@@ -552,9 +568,9 @@ namespace {
                         }                        
 
                         //set operand for postBB use
-                        errs() << "Case 3: swapping out operand " << *opi << "\n";
+                        // errs() << "Case 3: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[def];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     // Special case 1 - one def'n in obfBB2 and one in alterBB - Create dummy phi in dop2BB and cleanup in dop3BB
                     else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB) {
@@ -577,9 +593,9 @@ namespace {
                             dop2BBPHI[(Instruction *)phi] = phi2;
                         }
 
-                        errs() << "Special case: swapping out operand " << *opi << "\n";
+                        // errs() << "Special case: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[dop2BBPHI[def]];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     // Special case 2 - one def'n in obfBB3 and one in alterBB2 - Create dummy phi in dop3BB and cleanup in postBB
                     else if (def->getParent() == obfBB3 && fixssa[def]->getParent() == alterBB2) {
@@ -602,9 +618,9 @@ namespace {
                             dop2BBPHI[(Instruction *)phi] = phi2;
                         }
 
-                        errs() << "Special case 2: swapping out operand " << *opi << "\n";
+                        // errs() << "Special case 2: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[dop2BBPHI[def]];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
 
                 }
@@ -624,6 +640,17 @@ namespace {
             //     errs() << *bb << "\n";
             errs() << "we have obfuscated a BB in function ";
             errs().write_escaped(F.getName()) << "\n";
+            numBB = 0;
+            numEdges = 0;
+            for (Function::iterator bb = F.begin(); bb != F.end(); ++bb) {
+                ++numBB;
+                for (BasicBlock *Pred : predecessors(&(*bb))) {
+                    ++numEdges;
+                }
+            }
+            errs() << "obfuscated function:\nnum BBs = " << numBB << "\nnum edges = " 
+                   << numEdges << "\ncyclomatic number = " << numEdges - numBB + 2 
+                   << '\n';
             return true;
 
         }

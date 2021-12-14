@@ -47,6 +47,17 @@ namespace {
 
         // add dynamic opaque predicate to sequential code
         bool addDopSeq(Function &F) {
+            int numBB = 0;
+            int numEdges = 0;
+            for (Function::iterator bb = F.begin(); bb != F.end(); ++bb) {
+                ++numBB;
+                for (BasicBlock *Pred : predecessors(&(*bb))) {
+                    ++numEdges;
+                }
+            }
+            errs() << "original function:\nnum BBs = " << numBB << "\nnum edges = " 
+                   << numEdges << "\ncyclomatic number = " << numEdges - numBB + 2 
+                   << '\n';
             bool firstStore = true;
             unsigned int covar;
             BasicBlock *preBB, *postBB, *obfBB;
@@ -579,17 +590,28 @@ namespace {
             // } //for
             
 
-            errs() << *preBB << '\n';
-            errs() << *obfBB << '\n';
-            errs() << *alterBB << '\n';
-            errs() << *dop2BB << "\n";
-            errs() << *obfBB2 << "\n";
-            errs() << *alterBB2 << "\n";
-            errs() << *postBB << '\n';
+            // errs() << *preBB << '\n';
+            // errs() << *obfBB << '\n';
+            // errs() << *alterBB << '\n';
+            // errs() << *dop2BB << "\n";
+            // errs() << *obfBB2 << "\n";
+            // errs() << *alterBB2 << "\n";
+            // errs() << *postBB << '\n';
             // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb)
             //     errs() << *bb << "\n";
             errs() << "we have obfuscated a BB in function ";
             errs().write_escaped(F.getName()) << "\n";
+            numBB = 0;
+            numEdges = 0;
+            for (Function::iterator bb = F.begin(); bb != F.end(); ++bb) {
+                ++numBB;
+                for (BasicBlock *Pred : predecessors(&(*bb))) {
+                    ++numEdges;
+                }
+            }
+            errs() << "obfuscated function:\nnum BBs = " << numBB << "\nnum edges = " 
+                   << numEdges << "\ncyclomatic number = " << numEdges - numBB + 2 
+                   << '\n';
             return true;
 
         }

@@ -407,6 +407,11 @@ namespace {
             // insert phi node and update uses in postBB
             ii = postBB->begin();
             for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
+                // if it's a phi node, that means we've inserted it. keep going
+                if (isa<PHINode>(*i)){
+                    errs() << i->getOpcodeName() << '\n';
+                    continue;
+                }
                 for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
                     Instruction *p;
                     Instruction *def = dyn_cast<Instruction>(*opi);

@@ -11,5 +11,6 @@ include_directories(${LLVM_INCLUDE_DIRS} utils)                 # You don't need
 add_subdirectory(utils)
 
 # LLVM Passes
+add_subdirectory(tripdopseq-pass)
 add_subdirectory(boguscf-pass)
 add_subdirectory(dopseq-pass)

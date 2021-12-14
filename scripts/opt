@@ -20,6 +20,7 @@ if [ $1 == "-h" ]; then
     opt-12  -load "${PARENT_DIR}/../build/utils/libutils.so" \
         -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
         -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
+        -load "${PARENT_DIR}/../build/tripdopseq-pass/TRIPDOPSEQ.so" \
         --help
 # If otherwise incorrect number of arguments
 elif [ $# -ne 2 ]; then
@@ -31,4 +32,5 @@ fi
 opt-12  -load "${PARENT_DIR}/../build/utils/libutils.so" \
         -load "${PARENT_DIR}/../build/boguscf-pass/BOGUS-CF.so" \
         -load "${PARENT_DIR}/../build/dopseq-pass/DOPSEQ.so" \
+        -load "${PARENT_DIR}/../build/tripdopseq-pass/TRIPDOPSEQ.so" \
         -"$2" < $1 > ${1%.*}.opt.bc

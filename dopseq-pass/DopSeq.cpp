@@ -24,6 +24,8 @@ namespace {
         DopSeq(bool flag) : FunctionPass(ID) {this->flag = flag; DopSeq();}
 
         bool runOnFunction(Function &F) override {
+            errs() << "before to obf ";
+            errs().write_escaped(F.getName()) << '\n';
             if(toObfuscate(flag,&F,"dopseq")) {
                 //StringRef *sr = new StringRef("fun");
                 //if (F.getName().equals(*sr)) {
@@ -180,10 +182,10 @@ namespace {
             // errs() << *dop1st << '\n';
 
             // load the dop1's value
-            Twine *tmep1_twine = new Twine("temp1"); //created new twine for allocainst
-            Twine *temp2_twine = new Twine("temp2"); //created new twine for allocainst
-            LoadInst* dop1p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1, *tmep1_twine, false, &(*ii));
-            LoadInst* dop1deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop1p, *temp2_twine, false, &(*ii));
+            // Twine *tmep1_twine = new Twine("temp1"); //created new twine for allocainst
+            // Twine *temp2_twine = new Twine("temp2"); //created new twine for allocainst
+            LoadInst* dop1p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop1, "", false, &(*ii));
+            LoadInst* dop1deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop1p, "", false, &(*ii));
             /*
              * LoadInst* dop1p = new LoadInst(dop1, "", false, 4, &(*ii)); // OLD
              * LoadInst* dop1deref = new LoadInst(dop1p, "", false, 4, &(*ii)); // OLD
@@ -304,12 +306,12 @@ namespace {
             //errs() << "hola hijo \n";
 
             // create the second dop as a separate BB
-            Twine *temp3_twine = new Twine("temp3");
-            Twine *temp4_twine = new Twine("temp4");
+            // Twine *temp3_twine = new Twine("temp3");
+            // Twine *temp4_twine = new Twine("temp4");
             BasicBlock* dop2BB = BasicBlock::Create(F.getContext(), "dop2BB", &F, obfBB2);
 
-            LoadInst* dop2p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2, *temp3_twine, false, &(*dop2BB));
-            LoadInst* dop2deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop2p, *temp4_twine, false, &(*dop2BB));
+            LoadInst* dop2p = new LoadInst(Type::getInt32PtrTy(F.getContext()), dop2, "", false, &(*dop2BB));
+            LoadInst* dop2deref = new LoadInst(Type::getInt32Ty(F.getContext()), dop2p, "", false, &(*dop2BB));
             // LoadInst* dop2p = new LoadInst(dop2, "", false, 4, dop2BB); // OLD
             // LoadInst* dop2deref = new LoadInst(dop2p, "", false, 4, dop2BB); // OLD
 
@@ -375,7 +377,7 @@ namespace {
                             // Insert dummy instruction at the end of obfBB
                             // TODO make this instruction just set a constant value or something
                             // Instruction *dummy_inst = obfBB2->begin()->clone();
-                            Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
+                            // Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
                             //obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
 
                             // Insert PHI Node into dop2BB
@@ -383,7 +385,7 @@ namespace {
                             ii = dop2BB->begin();
                             PHINode *phi;
                             phi = PHINode::Create(def->getType(), 2, "", &(*ii));
-                            phi->addIncoming(dummy_inst, obfBB);
+                            phi->addIncoming(Constant::getNullValue(def->getType()), obfBB);
                             phi->addIncoming(fixssa[def], alterBB);
 
                             // Add cleanup phiNode in postBB
@@ -409,10 +411,10 @@ namespace {
             for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
                 // if it's a phi node, that means we've inserted it. keep going
                 if (isa<PHINode>(*i)){
-                    errs() << i->getOpcodeName() << '\n';
+                    errs() << "opname: " << i->getOpcodeName() << '\n';
                     continue;
                 }
-                for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi) {
+                for(User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
                     Instruction *p;
                     Instruction *def = dyn_cast<Instruction>(*opi);
 		            // PHINode *q;
@@ -457,15 +459,15 @@ namespace {
                     }
                     else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB) {
                         if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end() && dop2BBPHI.find((Instruction *)&(*i_phi)) == dop2BBPHI.end()) {
-                            Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
-                            obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
-
+                            //Instruction *dummy_inst = new LoadInst(def->getType(), (Value *)ConstantPointerNull::get(PointerType::get(def->getType(), 0)), "", &(*obfBB->begin()));
+                            
+                            //obfBB->getInstList().insert(obfBB->begin(), dummy_inst);
                             // Insert PHI Node into dop2BB
                             // create phi node to insert at beginning of dopBB2
                             ii = dop2BB->begin();
                             PHINode *phi;
                             phi = PHINode::Create(def->getType(), 2, "", &(*ii));
-                            phi->addIncoming(dummy_inst, obfBB);
+                            phi->addIncoming(Constant::getNullValue(def->getType()), obfBB);
                             phi->addIncoming(fixssa[def], alterBB);
 
                             // Add cleanup phiNode in postBB
@@ -501,9 +503,7 @@ namespace {
                     //     *opi = (Value*)fixnode;
                     // }
                 }
-            }   
-
-
+            }
             
             // special case: check to see if the extra operand in the cloned BB
             // is an instruction that's used on the next line.

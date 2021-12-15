@@ -24,8 +24,8 @@ namespace {
         DopSeq(bool flag) : FunctionPass(ID) {this->flag = flag; DopSeq();}
 
         bool runOnFunction(Function &F) override {
-            errs() << "before to obf ";
-            errs().write_escaped(F.getName()) << '\n';
+            // errs() << "before to obf ";
+            // errs().write_escaped(F.getName()) << '\n';
             if(toObfuscate(flag,&F,"dopseq")) {
                 //StringRef *sr = new StringRef("fun");
                 //if (F.getName().equals(*sr)) {
@@ -33,8 +33,14 @@ namespace {
                 errs() << "Function: ";
                 errs().write_escaped(F.getName()) << '\n';
                 
-                return addDopSeq(F);
+                // bool hasRun = false;
+                // while (addDopSeq(F)) {
+                //     hasRun = true;
+                // }
 
+                // return hasRun;
+
+                return addDopSeq(F);
                     // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                     //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
                     //         errs().write_escaped(i->getOpcodeName()) << '\n';
@@ -97,7 +103,7 @@ namespace {
                         if (firstStore == true &&
                             !nonStoreNames.count(string(i->getOperand(1)->getName()))) {
                             // errs() << *bb << "\n";
-                            errs() << "The first store: " << *i << "\n";
+                            // errs() << "The first store: " << *i << "\n";
                             //errs() << *i->getOperand(1)  << "\n";
                             
                             // create and assign a tempName to the operand. will be
@@ -131,8 +137,8 @@ namespace {
                             } else {
                                 hasSetEnd = true;
                                 //i->getOperand(1)->setName(ogName);
-                                errs() << lenObfBB << "\n";
-                                errs() << "The second store: " << *i << "\n";
+                                // errs() << lenObfBB << "\n";
+                                // errs() << "The second store: " << *i << "\n";
                             }
                             break;
                         }
@@ -422,7 +428,7 @@ namespace {
             for (BasicBlock::iterator i = postBB->begin(), e = postBB->end() ; i != e; ++i) {
                 // if it's a phi node, that means we've inserted it. keep going
                 if (isa<PHINode>(*i)){
-                    errs() << "opname: " << i->getOpcodeName() << '\n';
+                    // errs() << "opname: " << i->getOpcodeName() << '\n';
                     continue;
                 }
                 for(User::op_iterator opi = i->op_begin(), ope = i->op_end(); opi != ope; ++opi) {
@@ -449,9 +455,9 @@ namespace {
                         }
 
                         //set operand for postBB use
-                        errs() << "Case 1: swapping out operand " << *opi << "\n";
+                        // errs() << "Case 1: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[def];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB2) {
                         if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end()) {
@@ -464,9 +470,9 @@ namespace {
                         }                        
 
                         //set operand for postBB use
-                        errs() << "Case 2: swapping out operand " << *opi << "\n";
+                        // errs() << "Case 2: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[def];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
                     else if (def->getParent() == obfBB2 && fixssa[def]->getParent() == alterBB) {
                         if (auto i_phi = dop2BBPHI.find(def); i_phi == dop2BBPHI.end() && dop2BBPHI.find((Instruction *)&(*i_phi)) == dop2BBPHI.end()) {
@@ -493,9 +499,9 @@ namespace {
                             dop2BBPHI[(Instruction *)phi] = phi2;
                         }
 
-                        errs() << "Special case: swapping out operand " << *opi << "\n";
+                        // errs() << "Special case: swapping out operand " << *opi << "\n";
                         *opi = (Value*) dop2BBPHI[dop2BBPHI[def]];
-                        errs() << "operand is now " << *opi << "\n";
+                        // errs() << "operand is now " << *opi << "\n";
                     }
 
                     // if (fixssa.find(def) != fixssa.end()) {

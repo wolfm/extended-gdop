@@ -33,12 +33,13 @@ namespace {
                 errs() << "Function: ";
                 errs().write_escaped(F.getName()) << '\n';
                 
-                bool hasRun = false;
-                while (addTripDopSeq(F)) {
-                    hasRun = true;
-                }
+                // bool hasRun = false;
+                // while (addTripDopSeq(F)) {
+                //     hasRun = true;
+                // }
 
-                return hasRun;
+                // return hasRun;
+                return addTripDopSeq(F);
 
                     // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb) {
                     //     for (BasicBlock::iterator i = bb->begin(), e = bb->end(); i != e; ++i) {
@@ -52,6 +53,7 @@ namespace {
 
         // add dynamic opaque predicate to sequential code
         bool addTripDopSeq(Function &F) {
+            //errs() << "here\n";
             int numBB = 0;
             int numEdges = 0;
             for (Function::iterator bb = F.begin(); bb != F.end(); ++bb) {
@@ -60,6 +62,7 @@ namespace {
                     ++numEdges;
                 }
             }
+            
             errs() << "original function:\nnum BBs = " << numBB << "\nnum edges = " 
                    << numEdges << "\ncyclomatic number = " << numEdges - numBB + 2 
                    << '\n';
@@ -624,18 +627,19 @@ namespace {
                     }
 
                 }
+
             }
 
-            errs() << *preBB << '\n';
-            errs() << *obfBB << '\n';
-            errs() << *alterBB << '\n';
-            errs() << *dop2BB << "\n";
-            errs() << *obfBB2 << "\n";
-            errs() << *alterBB2 << "\n";
-            errs() << *dop3BB << "\n";
-            errs() << *obfBB3 << "\n";
-            errs() << *alterBB3 << "\n";
-            errs() << *postBB << '\n';
+            // errs() << *preBB << '\n';
+            // errs() << *obfBB << '\n';
+            // errs() << *alterBB << '\n';
+            // errs() << *dop2BB << "\n";
+            // errs() << *obfBB2 << "\n";
+            // errs() << *alterBB2 << "\n";
+            // errs() << *dop3BB << "\n";
+            // errs() << *obfBB3 << "\n";
+            // errs() << *alterBB3 << "\n";
+            // errs() << *postBB << '\n';
             // for (Function::iterator bb = F.begin(), e = F.end(); bb != e; ++bb)
             //     errs() << *bb << "\n";
             errs() << "we have obfuscated a BB in function ";
